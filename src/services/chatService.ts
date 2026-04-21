@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { redis } from "@/src/lib/redis";
+import { qdrant, COLLECTION_NAME } from "@/src/lib/qdrant";
+import { embedText } from "@/src/lib/embedding";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -23,6 +25,22 @@ const SYSTEM_PROMPT = `당신은 요양보호사를 위한 전문 AI 상담사�
 const HISTORY_TTL = 60 * 60 * 24;
 const MAX_HISTORY = 20;
 
+async function searchQdrant(query: string): Promise<string> {
+  const queryVector = await embedText(query);
+  const results = await qdrant.search(COLLECTION_NAME, {
+    vector: queryVector,
+    limit: 3,
+    with_payload: true,
+  });
+
+  if (!results.length) return '';
+
+  return results
+    .map((r) => r.payload?.content as string)
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 export const ChatService = {
   async getHistory(userId: number) {
     const raw = await redis.get(`chat_history:${userId}`);
@@ -40,9 +58,15 @@ export const ChatService = {
   },
 
   async streamChat(userId: number, message: string, onChunk: (text: string) => void) {
+    // Qdrant에서 관련 문서 검색
+    const context = await searchQdrant(message);
+
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash", // ✅ 수정
-      systemInstruction: SYSTEM_PROMPT,
+      model: "gemini-2.5-flash",
+      systemInstruction: SYSTEM_PROMPT + (context
+        ? `\n\n아래는 관련 참고 문서입니다. 답변 시 적극 활용하세요:\n${context}`
+        : ''
+      ),
     });
 
     const history = await ChatService.getHistory(userId);

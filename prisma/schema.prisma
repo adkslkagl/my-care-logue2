@@ -17,6 +17,7 @@ model User {
 
   accounts    Account[]
   emailTokens EmailVerification[]
+  emotionLogs EmotionLog[]
 }
 
 model Account {
@@ -37,6 +38,18 @@ model EmailVerification {
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmotionLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  content     String   @db.Text
+  stressScore Int
+  level       String   // NORMAL | CAUTION | DANGER
+  aiResponse  String   @db.Text
+  createdAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

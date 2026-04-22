@@ -3,7 +3,7 @@ import { PromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { RunnableSequence } from "@langchain/core/runnables";
 import { geminiLLM } from "@/src/lib/langchain-llm";
-import { hybridSearch } from "@/src/lib/langchain-vectorstore";
+import { hybridSearch, rerankDocs } from "@/src/lib/langchain-vectorstore";
 import { COLLECTION_NAME } from "@/src/lib/qdrant";
 import { verifyToken } from "@/src/lib/auth";
 
@@ -41,14 +41,17 @@ export async function POST(request: Request) {
     let context = "";
     
     // 건강 기록 관련 키워드가 있을 때만 검색
-    const needsHealthRecords = /혈압|혈당|콜레스테롤|검진|기록|수치|결과|처방|진료|병원|검사/i.test(message);
+    const needsHealthRecords = /혈압|혈당|콜레스테롤|검진|기록|수치|결과|처방|진료|병원|검사|번아웃|감정노동|욕창|체위|요양보호사|스트레스|소진|피로|상처|드레싱|압박|피부|호흡|수면|운동|휴식|슈퍼비전/i.test(message);
     console.log(`건강 기록 검색 필요: ${needsHealthRecords}`);
     
     if (needsHealthRecords) {
       const vectorSearchStart = Date.now();
 
-      const docs = await hybridSearch(COLLECTION_NAME, message, 3);
-      console.log(`[2] 하이브리드 검색 완료: ${Date.now() - vectorSearchStart}ms (${docs.length}개 문서)`);
+      const candidates = await hybridSearch(COLLECTION_NAME, message);
+      console.log(`  - 하이브리드 검색: ${candidates.length}개 후보`);
+
+      const docs = await rerankDocs(message, candidates, 3);
+      console.log(`[2] 리랭킹 완료: ${Date.now() - vectorSearchStart}ms (${docs.length}개 문서)`);
 
       context = docs
         .map((doc: { pageContent: string }) => doc.pageContent.slice(0, 500))

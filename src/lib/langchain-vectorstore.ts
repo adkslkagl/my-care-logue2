@@ -2,6 +2,9 @@ import { QdrantVectorStore } from "@langchain/qdrant";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { computeSparseVector } from "./sparse-embedding";
+import { CohereClient } from "cohere-ai";
+
+const cohere = new CohereClient({ token: process.env.COHERE_API_KEY });
 
 const qdrantClient = new QdrantClient({
   url: process.env.QDRANT_URL || "http://localhost:6333",
@@ -27,7 +30,7 @@ export { embeddings, qdrantClient };
 export async function hybridSearch(
   collectionName: string,
   query: string,
-  k = 3,
+  k = 10,
 ) {
   const [denseVector, sparseVector] = await Promise.all([
     embeddings.embedQuery(query),
@@ -48,4 +51,21 @@ export async function hybridSearch(
     pageContent: (point.payload as Record<string, unknown>)?.content as string ?? '',
     metadata: point.payload ?? {},
   }));
+}
+
+export async function rerankDocs(
+  query: string,
+  docs: { pageContent: string; metadata: Record<string, unknown> }[],
+  topN = 3,
+) {
+  if (docs.length === 0) return [];
+
+  const response = await cohere.rerank({
+    model: 'rerank-v3.5',
+    query,
+    documents: docs.map(d => d.pageContent),
+    topN,
+  });
+
+  return response.results.map(r => docs[r.index]);
 }

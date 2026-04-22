@@ -10,8 +10,9 @@ export async function initCollection() {
   const result = await qdrant.collectionExists(COLLECTION_NAME);
   if (!result.exists) {
     await qdrant.createCollection(COLLECTION_NAME, {
-      vectors: { size: 3072, distance: 'Cosine' },
+      vectors: { dense: { size: 3072, distance: 'Cosine' } },
+      sparse_vectors: { sparse: {} },
     });
-    console.log('컬렉션 생성 완료');
+    console.log('컬렉션 생성 완료 (dense + sparse)');
   }
 }

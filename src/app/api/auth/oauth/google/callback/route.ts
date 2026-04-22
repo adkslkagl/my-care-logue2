@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    const state = searchParams.get('state') ?? '';
     const { access_token } = await exchangeGoogleCode(code);
     const googleUser = await getGoogleUserInfo(access_token);
 
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
       userId: String(result.user.id),
       email: result.user.email ?? '',
       name: result.user.name ?? '',
+      ...(state && { state }),
     });
 
     return NextResponse.redirect(

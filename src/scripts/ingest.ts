@@ -5,6 +5,7 @@ import PDFParser from 'pdf2json';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { qdrant, COLLECTION_NAME, initCollection } from '../lib/qdrant';
 import { embedText } from '../lib/embedding';
+import { computeSparseVector } from '../lib/sparse-embedding';
 
 function extractTextFromPdf(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -37,15 +38,20 @@ async function ingest(filePath: string) {
   const docs = await splitter.createDocuments([text]);
   console.log(`청크 ${docs.length}개 생성`);
 
-  // 4. 임베딩 + Qdrant 저장
+  // 4. 임베딩 + Qdrant 저장 (dense + sparse)
   for (let i = 0; i < docs.length; i++) {
-    const vector = await embedText(docs[i].pageContent);
+    const content = docs[i].pageContent;
+    const denseVector = await embedText(content);
+    const sparseVector = computeSparseVector(content);
     await qdrant.upsert(COLLECTION_NAME, {
       points: [{
         id: Date.now() + i,
-        vector,
+        vector: {
+          dense: denseVector,
+          sparse: sparseVector,
+        },
         payload: {
-          content: docs[i].pageContent,
+          content,
           source: filePath,
         },
       }],
